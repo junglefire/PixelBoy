@@ -4,6 +4,7 @@ import logging as logger
 import array
 
 from .cartridge import load_cartridge
+from .timer import Timer
 from .ram import RAM
 from .cpu import CPU
 
@@ -12,17 +13,21 @@ class Mobo:
 		self.cartridge = None
 		self.ram = None
 		self.cpu = None
+		self.timer = None
 		self.VRAM0 = array.array("B", [0] * 8 * 1024)
 		pass
 
 	def load(self, filename):
 		self.cartridge = load_cartridge(filename)
 		logger.info(f"ROM Info:\n{self.cartridge}")
+		self.timer = Timer()
 		self.ram = RAM(False, False)
 		self.cpu = CPU(self)
 
 	def tick(self):
-		self.cpu.tick()
+		cycles = self.cpu.tick()
+		if self.timer.tick(cycles):
+			self.cpu.set_interruptflag(INTR_TIMER)
 		pass
 
 	def getitem(self, i):
@@ -37,6 +42,15 @@ class Mobo:
 		elif 0xC000 <= i < 0xE000: # 8kB Internal RAM
 			bank_offset = 0
 			return self.ram.internal_ram0[i - 0xC000 + bank_offset]
+		elif 0xFF00 <= i < 0xFF4C: # I/O ports
+			if i == 0xFF04:
+				return self.timer.DIV
+			elif i == 0xFF05:
+				return self.timer.TIMA
+			elif i == 0xFF06:
+				return self.timer.TMA
+			elif i == 0xFF07:
+				return self.timer.TAC
 		elif 0xFF80 <= i < 0xFFFF: # Internal RAM
 			return self.ram.internal_ram1[i - 0xFF80]
 		else:
@@ -56,6 +70,15 @@ class Mobo:
 		elif 0xC000 <= i < 0xE000: # 8kB Internal RAM
 			bank_offset = 0
 			self.ram.internal_ram0[i - 0xC000 + bank_offset] = value
+		elif 0xFF00 <= i < 0xFF4C: # I/O ports
+			if i == 0xFF04:
+				self.timer.reset()
+			elif i == 0xFF05:
+				self.timer.TIMA = value
+			elif i == 0xFF06:
+				self.timer.TMA = value
+			elif i == 0xFF07:
+				self.timer.TAC = value & 0b111 # TODO: Move logic to Timer class
 		elif 0xFF80 <= i < 0xFFFF: # Internal RAM
 			self.ram.internal_ram1[i - 0xFF80] = value
 		else:
