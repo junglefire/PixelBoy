@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*- 
 #!/usr/bin/env python
 import logging as log
+import time
 
 import gbcore as gb
 
@@ -12,3 +13,12 @@ class Emulator:
 	def load(self, filename):
 		self.mobo = gb.Mobo()
 		self.mobo.load(filename)
+
+	def run(self):
+		while True:
+			now = time.perf_counter_ns()
+			self.mobo.tick()
+			delta = time.perf_counter_ns()-now
+			now += delta
+			print(delta)
+		pass

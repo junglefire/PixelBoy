@@ -17,6 +17,7 @@ def main(filename: str, debug: bool) -> None:
 	# Application
 	emu = Emulator()
 	emu.load(filename)
+	emu.run()
 
 if __name__ == "__main__":
 	main()
