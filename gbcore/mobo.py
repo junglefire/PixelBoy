@@ -15,6 +15,9 @@ class Mobo:
 		self.cpu = None
 		self.timer = None
 		self.VRAM0 = array.array("B", [0] * 8 * 1024)
+		# 串口 
+		self.serialbuffer = [0] * 1024
+		self.serialbuffer_count = 0
 		pass
 
 	def load(self, filename):
@@ -71,7 +74,12 @@ class Mobo:
 			bank_offset = 0
 			self.ram.internal_ram0[i - 0xC000 + bank_offset] = value
 		elif 0xFF00 <= i < 0xFF4C: # I/O ports
-			if i == 0xFF04:
+			if i == 0xFF01:
+				self.serialbuffer[self.serialbuffer_count] = value
+				self.serialbuffer_count += 1
+				self.serialbuffer_count &= 0x3FF
+				self.ram.io_ports[i - 0xFF00] = value
+			elif i == 0xFF04:
 				self.timer.reset()
 			elif i == 0xFF05:
 				self.timer.TIMA = value
@@ -83,3 +91,10 @@ class Mobo:
 			self.ram.internal_ram1[i - 0xFF80] = value
 		else:
 			logger.critical("Memory access violation. Tried to write: 0x%0.2x to 0x%0.4x", value, i)	
+
+	def getserial(self):
+		b = "".join([chr(x) for x in self.serialbuffer[:self.serialbuffer_count]])
+		self.serialbuffer_count = 0
+		return b
+
+
