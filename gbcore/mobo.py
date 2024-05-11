@@ -4,7 +4,7 @@ import logging as log
 
 from .cartridge import load_cartridge
 
-class Emulator:
+class Mobo:
 	def __init__(self):
 		self.rom = None
 		pass

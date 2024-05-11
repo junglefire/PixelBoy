@@ -5,7 +5,7 @@
 
 # from .base_mbc import BaseMBC, ROMOnly
 from .cartridge import load_cartridge
-from .emulator import Emulator
+from .mobo import Mobo
 
 # from .mbc1 import MBC1
 # from .mbc2 import MBC2
