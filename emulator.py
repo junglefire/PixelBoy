@@ -20,5 +20,6 @@ class Emulator:
 			self.mobo.tick()
 			delta = time.perf_counter_ns()-now
 			now += delta
-			print(delta)
+			# time.sleep(1)
 		pass
+

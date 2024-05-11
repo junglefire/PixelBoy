@@ -4,17 +4,31 @@ import logging as logger
 import array
 
 from .cartridge import load_cartridge
+from .parameters import *
 from .timer import Timer
 from .ram import RAM
 from .cpu import CPU
+from .ppu import PPU
+
+defaults = {
+	"color_palette": (0xFFFFFF, 0x999999, 0x555555, 0x000000),
+	"cgb_color_palette": (
+		(0xFFFFFF, 0x7BFF31, 0x0063C5, 0x000000), 
+		(0xFFFFFF, 0xFF8484, 0x943A3A, 0x000000), 
+		(0xFFFFFF, 0xFF8484, 0x943A3A, 0x000000)
+	),
+	"scale": 3,
+	"window": "SDL2",
+	"log_level": "DEBUG",
+}
 
 class Mobo:
 	def __init__(self):
 		self.cartridge = None
 		self.ram = None
 		self.cpu = None
+		self.ppu = None
 		self.timer = None
-		self.VRAM0 = array.array("B", [0] * 8 * 1024)
 		# 串口 
 		self.serialbuffer = [0] * 1024
 		self.serialbuffer_count = 0
@@ -26,11 +40,15 @@ class Mobo:
 		self.timer = Timer()
 		self.ram = RAM(False, False)
 		self.cpu = CPU(self)
+		self.ppu = PPU(defaults["color_palette"])
 
 	def tick(self):
 		cycles = self.cpu.tick()
 		if self.timer.tick(cycles):
 			self.cpu.set_interruptflag(INTR_TIMER)
+		lcd_interrupt = self.ppu.tick(cycles)
+		if lcd_interrupt:
+			self.cpu.set_interruptflag(lcd_interrupt)
 		pass
 
 	def getitem(self, i):
@@ -39,7 +57,7 @@ class Mobo:
 		elif 0x4000 <= i < 0x8000: # 16kB switchable ROM bank
 			return self.cartridge.getitem(i)
 		elif 0x8000 <= i < 0xA000: # 8kB Video RAM
-			return self.VRAM0[i - 0x8000]
+			return self.ppu.VRAM0[i - 0x8000]
 		elif 0xA000 <= i < 0xC000: # 8kB switchable RAM bank
 			return self.cartridge.getitem(i)
 		elif 0xC000 <= i < 0xE000: # 8kB Internal RAM
@@ -54,8 +72,38 @@ class Mobo:
 				return self.timer.TMA
 			elif i == 0xFF07:
 				return self.timer.TAC
+			elif i == 0xFF0F:
+				return self.cpu.interrupts_flag_register
+			elif i == 0xFF40:
+				return self.ppu.get_lcdc()
+			elif i == 0xFF41:
+				return self.ppu.get_stat()
+			elif i == 0xFF42:
+				return self.ppu.SCY
+			elif i == 0xFF43:
+				return self.ppu.SCX
+			elif i == 0xFF44:
+				return self.ppu.LY
+			elif i == 0xFF45:
+				return self.ppu.LYC
+			elif i == 0xFF46:
+				return 0x00 # DMA
+			elif i == 0xFF47:
+				return self.ppu.BGP.get()
+			elif i == 0xFF48:
+				return self.ppu.OBP0.get()
+			elif i == 0xFF49:
+				return self.ppu.OBP1.get()
+			elif i == 0xFF4A:
+				return self.ppu.WY
+			elif i == 0xFF4B:
+				return self.ppu.WX
+			else:
+				return self.ram.io_ports[i - 0xFF00]
 		elif 0xFF80 <= i < 0xFFFF: # Internal RAM
 			return self.ram.internal_ram1[i - 0xFF80]
+		elif i == 0xFFFF: # Interrupt Enable Register
+			return self.cpu.interrupts_enabled_register
 		else:
 			logger.critical("Memory access violation. Tried to read: %0.4x", i)
 
@@ -67,7 +115,7 @@ class Mobo:
 			# Doesn't change the data. This is for MBC commands
 			self.cartridge.setitem(i, value)
 		elif 0x8000 <= i < 0xA000: # 8kB Video RAM
-			self.lcd.VRAM0[i - 0x8000] = value
+			self.ppu.VRAM0[i - 0x8000] = value
 		elif 0xA000 <= i < 0xC000: # 8kB switchable RAM bank
 			self.cartridge.setitem(i, value)
 		elif 0xC000 <= i < 0xE000: # 8kB Internal RAM
@@ -87,8 +135,39 @@ class Mobo:
 				self.timer.TMA = value
 			elif i == 0xFF07:
 				self.timer.TAC = value & 0b111 # TODO: Move logic to Timer class
+			elif i == 0xFF0F:
+				self.cpu.interrupts_flag_register = value
+			elif i == 0xFF40:
+				self.ppu.set_lcdc(value)
+			elif i == 0xFF41:
+				self.ppu.set_stat(value)
+			elif i == 0xFF42:
+				self.ppu.SCY = value
+			elif i == 0xFF43:
+				self.ppu.SCX = value
+			elif i == 0xFF44:
+				self.ppu.LY = value
+			elif i == 0xFF45:
+				self.ppu.LYC = value
+			elif i == 0xFF47:
+				if self.ppu.BGP.set(value):
+					self.ppu.render.clear_tilecache0()
+			elif i == 0xFF48:
+				if self.ppu.OBP0.set(value):
+					self.ppu.render.clear_spritecache0()
+			elif i == 0xFF49:
+				if self.ppu.OBP1.set(value):
+					self.ppu.render.clear_spritecache1()
+			elif i == 0xFF4A:
+				self.ppu.WY = value
+			elif i == 0xFF4B:
+				self.ppu.WX = value
+			else:
+				self.ram.io_ports[i - 0xFF00] = value
 		elif 0xFF80 <= i < 0xFFFF: # Internal RAM
 			self.ram.internal_ram1[i - 0xFF80] = value
+		elif i == 0xFFFF: # Interrupt Enable Register
+			self.cpu.interrupts_enabled_register = value
 		else:
 			logger.critical("Memory access violation. Tried to write: 0x%0.2x to 0x%0.4x", value, i)	
 

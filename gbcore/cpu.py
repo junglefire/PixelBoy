@@ -68,7 +68,7 @@ class CPU:
 		if opcode == 0xCB: # Extension code
 			opcode = self.mb.getitem(self.PC + 1)
 			opcode += 0x100 # Internally shifting look-up table
-		logger.debug(f"Code: {opcode}, Func: {opcodes.CPU_COMMANDS[opcode]}")	
+		# logger.debug(f"Code: {opcode}, Func: {opcodes.CPU_COMMANDS[opcode]}")	
 		return opcodes.execute_opcode(self, opcode)
 
 	def set_interruptflag(self, flag):
