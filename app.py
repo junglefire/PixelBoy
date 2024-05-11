@@ -3,7 +3,7 @@
 import logging as logger
 import click
 
-from emulator import Emulator
+import gbcore as gb
 
 # parse command line
 @click.command()
@@ -15,7 +15,7 @@ def main(filename: str, debug: bool) -> None:
 	else:
 		logger.basicConfig(format='[%(asctime)s][%(levelname)s] %(message)s', level=logger.INFO)
 	# Application
-	emu = Emulator()
+	emu = gb.Emulator()
 	emu.load(filename)
 
 if __name__ == "__main__":

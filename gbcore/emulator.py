@@ -2,8 +2,7 @@
 #!/usr/bin/env python
 import logging as log
 
-# GameBoy Core Module
-import gbcore as gb
+from .cartridge import load_cartridge
 
 class Emulator:
 	def __init__(self):
@@ -11,5 +10,5 @@ class Emulator:
 		pass
 
 	def load(self, filename):
-		self.rom = gb.load_cartridge(filename)
+		self.rom = load_cartridge(filename)
 		log.info(f"ROM Info:\n{self.rom}")
