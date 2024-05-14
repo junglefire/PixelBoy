@@ -4,6 +4,7 @@ import logging as logger
 import array
 
 from .cartridge import load_cartridge
+from .bootrom import BootROM
 from .parameters import *
 from .timer import Timer
 from .ram import RAM
@@ -32,6 +33,8 @@ class Mobo:
 		# 串口 
 		self.serialbuffer = [0] * 1024
 		self.serialbuffer_count = 0
+		self.bootrom_enabled = True
+		self.cgb = False
 		pass
 
 	def load(self, filename):
@@ -41,19 +44,24 @@ class Mobo:
 		self.ram = RAM(False, False)
 		self.cpu = CPU(self)
 		self.ppu = PPU(defaults["color_palette"])
+		self.bootrom = BootROM(bootrom_file=None, cgb=False)
 
 	def tick(self):
-		cycles = self.cpu.tick()
-		if self.timer.tick(cycles):
-			self.cpu.set_interruptflag(INTR_TIMER)
-		lcd_interrupt = self.ppu.tick(cycles)
-		if lcd_interrupt:
-			self.cpu.set_interruptflag(lcd_interrupt)
+		while self.processing_frame():
+			cycles = self.cpu.tick()
+			if self.timer.tick(cycles):
+				self.cpu.set_interruptflag(INTR_TIMER)
+			lcd_interrupt = self.ppu.tick(cycles)
+			if lcd_interrupt:
+				self.cpu.set_interruptflag(lcd_interrupt)
 		pass
 
 	def getitem(self, i):
 		if 0x0000 <= i < 0x4000: # 16kB ROM bank #0
-			return self.cartridge.getitem(i)
+			if self.bootrom_enabled and (i <= 0xFF or (self.cgb and 0x200 <= i < 0x900)):
+				return self.bootrom.getitem(i)
+			else:
+				return self.cartridge.getitem(i)
 		elif 0x4000 <= i < 0x8000: # 16kB switchable ROM bank
 			return self.cartridge.getitem(i)
 		elif 0x8000 <= i < 0xA000: # 8kB Video RAM
@@ -164,6 +172,12 @@ class Mobo:
 				self.ppu.WX = value
 			else:
 				self.ram.io_ports[i - 0xFF00] = value
+		elif 0xFF4C <= i < 0xFF80: # Empty but unusable for I/O
+			if self.bootrom_enabled and i == 0xFF50 and (value == 0x1 or value == 0x11):
+				logger.debug("Bootrom disabled!")
+				self.bootrom_enabled = False
+			else:
+				self.ram.non_io_internal_ram1[i - 0xFF4C] = value
 		elif 0xFF80 <= i < 0xFFFF: # Internal RAM
 			self.ram.internal_ram1[i - 0xFF80] = value
 		elif i == 0xFFFF: # Interrupt Enable Register
@@ -176,4 +190,8 @@ class Mobo:
 		self.serialbuffer_count = 0
 		return b
 
+	def processing_frame(self):
+		b = (not self.ppu.frame_done)
+		self.ppu.frame_done = False # Clear vblank flag for next iteration
+		return b
 

@@ -15,8 +15,7 @@ def main(filename: str, debug: bool) -> None:
 	else:
 		logger.basicConfig(format='[%(asctime)s][%(levelname)s] %(message)s', level=logger.INFO)
 	# Application
-	emu = Emulator()
-	emu.load(filename)
+	emu = Emulator(filename)
 	emu.run()
 
 if __name__ == "__main__":

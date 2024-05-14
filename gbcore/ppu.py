@@ -118,6 +118,7 @@ class PPU:
 		self.disable_renderer = False
 		self.clock = 0
 		self.clock_target = 0
+		self.frame_done = False
 		# 渲染引擎
 		self.render = Render()
 

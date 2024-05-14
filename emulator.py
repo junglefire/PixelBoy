@@ -3,16 +3,15 @@
 import logging as log
 import time
 
+import displayer as dp 
 import gbcore as gb
 
 class Emulator:
-	def __init__(self):
-		self.mobo = None
-		pass
-
-	def load(self, filename):
+	def __init__(self, filename: str):
 		self.mobo = gb.Mobo()
 		self.mobo.load(filename)
+		self.displayer = dp.Displayer(self.mobo)
+		pass
 
 	def run(self):
 		while True:
@@ -20,6 +19,6 @@ class Emulator:
 			self.mobo.tick()
 			delta = time.perf_counter_ns()-now
 			now += delta
-			# time.sleep(1)
+			self.displayer.update()
 		pass
 
