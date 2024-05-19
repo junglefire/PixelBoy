@@ -8,13 +8,11 @@ import time
 from sdl2.ext import get_events
 from sdl2 import *
 
-import gbcore as gb
+from .parameters import *
 
-ROWS, COLS = 144, 160
-SCALE = 3
-
-class Displayer:
-	def __init__(self, mobo):
+# The GUI class is the user interface for interaction, encompassing user input and output and image display
+class GUI:
+	def __init__(self, cpu, ppu, joypad):
 		SDL_Init(SDL_INIT_VIDEO|SDL_INIT_GAMECONTROLLER)
 		self._ftime = time.perf_counter_ns()
 		self._window = SDL_CreateWindow(b"PixelBoy", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, COLS*SCALE, ROWS*SCALE, SDL_WINDOW_RESIZABLE)
@@ -22,17 +20,25 @@ class Displayer:
 		SDL_RenderSetLogicalSize(self._sdlrenderer, COLS, ROWS)
 		self._sdltexturebuffer = SDL_CreateTexture(self._sdlrenderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, COLS, ROWS) 
 		SDL_ShowWindow(self._window)
-		self.mobo = mobo
+		self.ppu = ppu
+		self.cpu = cpu
+		self.joypad = joypad
 		pass
 
-	def update(self):
+	def handle_event(self) -> bool:
 		event = SDL_Event()
-		running = True
 		while SDL_PollEvent(ctypes.byref(event)) != 0:
 			if event.type == SDL_QUIT:
-				running = False
-				break
-		SDL_UpdateTexture(self._sdltexturebuffer, None, self.mobo.ppu.render._screenbuffer_ptr, COLS * 4)
+				return True	
+			elif event.type == SDL_KEYDOWN or event.type == SDL_KEYUP:
+				if self.joypad.key_event(event):
+					self.cpu.set_interruptflag(INTR_HIGHTOLOW)
+			else:
+				pass
+		return False
+
+	def update(self):
+		SDL_UpdateTexture(self._sdltexturebuffer, None, self.ppu.render._screenbuffer_ptr, COLS * 4)
 		SDL_RenderCopy(self._sdlrenderer, self._sdltexturebuffer, None, None)
 		SDL_RenderPresent(self._sdlrenderer)
 		SDL_RenderClear(self._sdlrenderer)

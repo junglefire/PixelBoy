@@ -8,4 +8,5 @@ FRAME_CYCLES = 70224
 
 # GameBoy屏幕尺寸
 ROWS, COLS = 144, 160
+SCALE = 3
 

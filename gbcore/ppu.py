@@ -120,7 +120,7 @@ class PPU:
 		self.clock_target = 0
 		self.frame_done = False
 		# 渲染引擎
-		self.render = Render()
+		self.render = Render(False)
 
 	def tick(self, cycles):
 		interrupt_flag = 0
@@ -129,24 +129,29 @@ class PPU:
 			if self.clock >= self.clock_target:
 				# Change to next mode
 				interrupt_flag |= self._STAT.set_mode(self.next_stat_mode)
+				# Pan Docs:
+				# The following are typical when the display is enabled:
+				#   Mode 2  2_____2_____2_____2_____2_____2___________________2____
+				#   Mode 3  _33____33____33____33____33____33__________________3___
+				#   Mode 0  ___000___000___000___000___000___000________________000
+				#   Mode 1  ____________________________________11111111111111_____
+				multiplier = 1
+				# LCD state machine
 				if self._STAT._mode == 2: # Searching OAM
-					logger.debug("Searching OAM")
 					if self.LY == 153:
 						self.LY = 0
 						self.clock %= FRAME_CYCLES
 						self.clock_target %= FRAME_CYCLES
 					else:
 						self.LY += 1
-					self.clock_target += 80
+					self.clock_target += 80 * multiplier
 					self.next_stat_mode = 3
 					interrupt_flag |= self._STAT.update_LYC(self.LYC, self.LY)
 				elif self._STAT._mode == 3:
-					logger.debug("Drawing")
-					self.clock_target += 170
+					self.clock_target += 170 * multiplier
 					self.next_stat_mode = 0
 				elif self._STAT._mode == 0: # HBLANK
-					logger.debug("HBLANK")
-					self.clock_target += 206
+					self.clock_target += 206 * multiplier
 					self.render.scanline(self, self.LY)
 					self.render.scanline_sprites(self, self.LY, self.render._screenbuffer, self.render._screenbuffer_attributes, False)
 					if self.LY < 143:
@@ -154,8 +159,7 @@ class PPU:
 					else:
 						self.next_stat_mode = 1
 				elif self._STAT._mode == 1: # VBLANK
-					logger.debug("VBLANK")
-					self.clock_target += 456 
+					self.clock_target += 456 * multiplier
 					self.next_stat_mode = 1
 					self.LY += 1
 					interrupt_flag |= self._STAT.update_LYC(self.LYC, self.LY)
