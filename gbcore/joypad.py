@@ -23,56 +23,40 @@ class Joypad:
 		_standard = self.standard
 		if event.type == SDL_KEYDOWN:
 			if event.key.keysym.sym == SDLK_RIGHT:
-				print("SDLK_RIGHT down")
 				self.directional = reset_bit(self.directional, P10)
 			elif event.key.keysym.sym == SDLK_LEFT:
-				print("SDLK_LEFT down")
 				self.directional = reset_bit(self.directional, P11)
 			elif event.key.keysym.sym == SDLK_UP:
-				print("SDLK_UP down")
 				self.directional = reset_bit(self.directional, P12)
 			elif event.key.keysym.sym == SDLK_DOWN:
-				print("SDLK_DOWN down")
 				self.directional = reset_bit(self.directional, P13)
 			elif event.key.keysym.sym == SDLK_a:
-				print("SDLK_a down")
 				self.standard = reset_bit(self.standard, P10)
 			elif event.key.keysym.sym == SDLK_b:
-				print("SDLK_b down")
 				self.standard = reset_bit(self.standard, P11)
 			elif event.key.keysym.sym == SDLK_BACKSPACE:
-				print("SDLK_BACKSPACE down")
 				self.standard = reset_bit(self.standard, P12)
 			elif event.key.keysym.sym == SDLK_RETURN:
-				print("SDLK_RETURN down")
 				self.standard = reset_bit(self.standard, P13)
 			else:
 				pass
 		elif event.type == SDL_KEYUP:
 			if event.key.keysym.sym == SDLK_RIGHT:
-				print("SDLK_RIGHT up")
 				self.directional = set_bit(self.directional, P10)
 			elif event.key.keysym.sym == SDLK_LEFT:
-				print("SDLK_LEFT up")
-				self.directional = reset_bit(self.directional, P11)
+				self.directional = set_bit(self.directional, P11)
 			elif event.key.keysym.sym == SDLK_UP:
-				print("SDLK_UP up")
-				self.directional = reset_bit(self.directional, P12)
+				self.directional = set_bit(self.directional, P12)
 			elif event.key.keysym.sym == SDLK_DOWN:
-				print("SDLK_DOWN up")
-				self.directional = reset_bit(self.directional, P13)
+				self.directional = set_bit(self.directional, P13)
 			elif event.key.keysym.sym == SDLK_a:
-				print("SDLK_a up")
-				self.standard = reset_bit(self.standard, P10)
+				self.standard = set_bit(self.standard, P10)
 			elif event.key.keysym.sym == SDLK_b:
-				print("SDLK_b up")
-				self.standard = reset_bit(self.standard, P11)
+				self.standard = set_bit(self.standard, P11)
 			elif event.key.keysym.sym == SDLK_BACKSPACE:
-				print("SDLK_BACKSPACE up")
-				self.standard = reset_bit(self.standard, P12)
+				self.standard = set_bit(self.standard, P12)
 			elif event.key.keysym.sym == SDLK_RETURN:
-				print("SDLK_RETURN up")
-				self.standard = reset_bit(self.standard, P13)
+				self.standard = set_bit(self.standard, P13)
 			else:
 				pass
 		# XOR to find the changed bits, AND it to see if it was high before.

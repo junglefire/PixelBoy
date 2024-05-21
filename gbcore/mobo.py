@@ -1,13 +1,19 @@
 # -*- coding: utf-8 -*- 
 #!/usr/bin/env python
 import logging as logger
+import ctypes
 import array
+import time
+
+# import PySDL2
+from sdl2.ext import get_events
+from sdl2 import *
 
 from .cartridge import load_cartridge
 from .bootrom import BootROM
 from .joypad import Joypad
 from .parameters import *
-# from .sound import Sound
+from .sound import Sound
 from .timer import Timer
 from .ram import RAM
 from .cpu import CPU
@@ -36,12 +42,17 @@ class Mobo:
 		self.joypad = None
 		self.bootrom = None
 		self.gui = None
-		# self.sound = None
+		self.sound = None
 		# 串口 
 		self.serialbuffer = [0] * 1024
 		self.serialbuffer_count = 0
 		self.bootrom_enabled = True
 		self.cgb = False
+		# SDL句柄
+		self._ftime = None
+		self._window = None
+		self._sdlrenderer = None
+		self._sdltexturebuffer = None
 		pass
 
 	def load(self, filename):
@@ -53,20 +64,26 @@ class Mobo:
 		self.ppu = PPU(defaults["color_palette"])
 		self.bootrom = BootROM(bootrom_file=None, cgb=False)
 		self.joypad = Joypad()
-		self.gui = GUI(self.cpu, self.ppu, self.joypad)
-		# self.sound = Sound(False, False)
+		# self.gui = GUI(self.cpu, self.ppu, self.joypad)
+		self.sound = Sound(True, False)
+		self.__init_sdl2()
 
 	def tick(self):
-		if self.gui.handle_event() == True:
+		if self.__handle_keyboard_event() == True:
 			return True
-		while self.processing_frame():
+		while self.__processing_frame():
 			cycles = self.cpu.tick()
+			if self.timer.tick(cycles):
+				self.cpu.set_interruptflag(INTR_TIMER)
+			sclock = self.sound.clock
+			self.sound.clock = sclock + cycles
 			if self.timer.tick(cycles):
 				self.cpu.set_interruptflag(INTR_TIMER)
 			lcd_interrupt = self.ppu.tick(cycles)
 			if lcd_interrupt:
 				self.cpu.set_interruptflag(lcd_interrupt)
-		self.gui.update()
+		self.sound.sync()
+		self.__update_frame()
 		return False
 
 	def getitem(self, i):
@@ -113,8 +130,7 @@ class Mobo:
 			elif i == 0xFF0F:
 				return self.cpu.interrupts_flag_register
 			elif 0xFF10 <= i < 0xFF40:
-				pass
-				# [alex] return self.sound.get(i - 0xFF10)
+				return self.sound.get(i - 0xFF10)
 			elif i == 0xFF40:
 				return self.ppu.get_lcdc()
 			elif i == 0xFF41:
@@ -174,8 +190,8 @@ class Mobo:
 			return self.ram.internal_ram1[i - 0xFF80]
 		elif i == 0xFFFF: # Interrupt Enable Register
 			return self.cpu.interrupts_enabled_register
-		# else:
-		#	logger.critical("Memory access violation. Tried to read: %0.4x", i)
+		else:
+			logger.critical("Memory access violation. Tried to read: %0.4x", i)
 
 	def setitem(self, i, value):
 		if 0x0000 <= i < 0x4000: # 16kB ROM bank #0
@@ -232,8 +248,7 @@ class Mobo:
 			elif i == 0xFF0F:
 				self.cpu.interrupts_flag_register = value
 			elif 0xFF10 <= i < 0xFF40:
-				pass
-				# self.sound.set(i - 0xFF10, value)
+				self.sound.set(i - 0xFF10, value)
 			elif i == 0xFF40:
 				self.ppu.set_lcdc(value)
 			elif i == 0xFF41:
@@ -247,7 +262,7 @@ class Mobo:
 			elif i == 0xFF45:
 				self.ppu.LYC = value
 			elif i == 0xFF46:
-				self.transfer_DMA(value)
+				self.__transfer_DMA(value)
 			elif i == 0xFF47:
 				if self.ppu.BGP.set(value):
 					# TODO: Move out of MB
@@ -311,12 +326,12 @@ class Mobo:
 		self.serialbuffer_count = 0
 		return b
 
-	def processing_frame(self):
+	def __processing_frame(self):
 		b = (not self.ppu.frame_done)
 		self.ppu.frame_done = False # Clear vblank flag for next iteration
 		return b
 
-	def transfer_DMA(self, src):
+	def __transfer_DMA(self, src):
 		# http://problemkaputt.de/pandocs.htm#lcdoamdmatransfers
 		# TODO: Add timing delay of 160µs and disallow access to RAM!
 		dst = 0xFE00
@@ -324,4 +339,48 @@ class Mobo:
 		for n in range(0xA0):
 			self.setitem(dst + n, self.getitem(n + offset))
 
+	def __init_sdl2(self):
+		# 初始化SDL
+		SDL_Init(SDL_INIT_VIDEO|SDL_INIT_GAMECONTROLLER)
+		self._ftime = time.perf_counter_ns()
+		self._window = SDL_CreateWindow(b"PixelBoy", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, COLS*SCALE, ROWS*SCALE, SDL_WINDOW_RESIZABLE)
+		self._sdlrenderer = SDL_CreateRenderer(self._window, -1, SDL_RENDERER_ACCELERATED)
+		SDL_RenderSetLogicalSize(self._sdlrenderer, COLS, ROWS)
+		self._sdltexturebuffer = SDL_CreateTexture(self._sdlrenderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, COLS, ROWS) 
+		SDL_ShowWindow(self._window)
+		pass
 
+	def __handle_keyboard_event(self) -> bool:
+		event = SDL_Event()
+		while SDL_PollEvent(ctypes.byref(event)) != 0:
+			if event.type == SDL_QUIT:
+				return True	
+			elif event.type == SDL_KEYDOWN or event.type == SDL_KEYUP:
+				if self.joypad.key_event(event):
+					self.cpu.set_interruptflag(INTR_HIGHTOLOW)
+			else:
+				pass
+		return False
+
+	def __update_frame(self):
+		SDL_UpdateTexture(self._sdltexturebuffer, None, self.ppu.render._screenbuffer_ptr, COLS * 4)
+		SDL_RenderCopy(self._sdlrenderer, self._sdltexturebuffer, None, None)
+		SDL_RenderPresent(self._sdlrenderer)
+		SDL_RenderClear(self._sdlrenderer)
+		self.__frame_limiter(1)
+
+	def __frame_limiter(self, speed):
+		self._ftime += int((1.0 / (60.0*speed)) * 1_000_000_000)
+		now = time.perf_counter_ns()
+		if (self._ftime > now):
+			delay = (self._ftime - now) // 1_000_000
+			SDL_Delay(delay)
+		else:
+			self._ftime = now
+		return True
+
+	def __del__(self):
+		SDL_DestroyTexture(self._sdltexturebuffer)
+		SDL_DestroyRenderer(self._sdlrenderer)
+		SDL_DestroyWindow(self._window)
+		SDL_Quit()
