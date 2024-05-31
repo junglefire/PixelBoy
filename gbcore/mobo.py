@@ -18,7 +18,6 @@ from .timer import Timer
 from .ram import RAM
 from .cpu import CPU
 from .ppu import PPU
-from .gui import GUI
 
 defaults = {
 	"color_palette": (0xFFFFFF, 0x999999, 0x555555, 0x000000),
